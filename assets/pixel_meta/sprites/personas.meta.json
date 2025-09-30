@@ -1,0 +1,20 @@
+{
+  "_comment": "六位队伍角色的头像与立绘像素规格说明。",
+  "sprite_spec": {
+    "width": 48,
+    "height": 48,
+    "frames": 4,
+    "anchor": "bottom-center",
+    "shadow": "circle-soft",
+    "palette": "gbc-like-16"
+  },
+  "characters": [
+    {"name": "勇者", "pose": "battle-ready"},
+    {"name": "剑士", "pose": "guard"},
+    {"name": "魔导师", "pose": "cast"},
+    {"name": "神官", "pose": "prayer"},
+    {"name": "盗贼", "pose": "sneak"},
+    {"name": "公主", "pose": "diplomacy"}
+  ],
+  "usage_notes": "每帧以 48x48 渲染，默认朝向右方，可通过镜像获得左向版本。"
+}
