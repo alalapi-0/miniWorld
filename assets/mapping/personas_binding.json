@@ -1,0 +1,9 @@
+{
+  "_comment": "为六位核心角色配置头像路径,前端可按需扩展更多角色",
+  "勇者": { "avatar": "assets/build/kenney/portraits/hero_01.png" },
+  "剑士": { "avatar": "assets/build/kenney/portraits/knight_01.png" },
+  "魔导师": { "avatar": "assets/build/kenney/portraits/mage_01.png" },
+  "神官": { "avatar": "assets/build/kenney/portraits/cleric_01.png" },
+  "盗贼": { "avatar": "assets/build/kenney/portraits/rogue_01.png" },
+  "公主": { "avatar": "assets/build/kenney/portraits/princess_01.png" }
+}

@@ -10,10 +10,11 @@
 5. [任务系统](#任务系统)
 6. [API 文档](#api-文档)
 7. [前端协作契约](#前端协作契约)
-8. [外部 LLM 接入说明](#外部-llm-接入说明)
-9. [开发规范](#开发规范)
-10. [路线图](#路线图)
-11. [Changelog](#changelog)
+8. [素材接入与许可](#素材接入与许可)
+9. [外部 LLM 接入说明](#外部-llm-接入说明)
+10. [开发规范](#开发规范)
+11. [路线图](#路线图)
+12. [Changelog](#changelog)
 
 ## 项目概述
 miniWorld 以“王都近郊重建”为核心背景,提供一个可离线运行的世界建设与角色群聊后端。系统内置六位角色(勇者、剑士、魔导师、神官、盗贼、公主),每位角色拥有独特的人设、权限与目标。服务在本地使用确定性模板生成器响应对话,同时提供区块化的世界地形、结构编辑、树木生长与任务推进等能力,便于像素 RPG 前端或小程序快速接入。
@@ -22,6 +23,9 @@ miniWorld 以“王都近郊重建”为核心背景,提供一个可离线运行
 ```
 .
 ├─ assets/
+│  ├─ external_catalog.json      # 外部素材目录与许可说明
+│  ├─ mapping/                   # 前端渲染映射(JSON)
+│  ├─ licenses/                  # 自动生成的许可证汇总
 │  ├─ pixel_meta/                # 像素元数据,纯文本描述瓦片规格
 │  └─ generators/                # 占位 PNG 生成脚本(默认不执行)
 ├─ data/
@@ -44,6 +48,7 @@ miniWorld 以“王都近郊重建”为核心背景,提供一个可离线运行
 │     ├─ store.py                # JSON 存储、配额冷却与日志
 │     ├─ tiles.py                # TileType 枚举与辅助方法
 │     └─ world_state.py          # 不可变世界状态模型
+├─ scripts/                      # 本地素材拉取与校验脚本
 ├─ tests/                        # pytest 用例,覆盖世界模型/动作/任务/API
 ├─ Makefile                      # 常用命令(make check/ make run 等)
 ├─ pyproject.toml                # 包配置、lint/test 设置
@@ -185,6 +190,45 @@ miniWorld 以“王都近郊重建”为核心背景,提供一个可离线运行
 - **任务面板**: `/world/quests` 返回的 `progress` 与 `target_count` 可直接驱动进度条,任务完成时会在审计日志与群聊播报中同步提示。
 - **群聊播报**: `/chat/simulate` 输出文本已包含 `地点/季节/任务摘要`,前端可直接渲染为群聊气泡或系统公告。
 
+## 素材接入与许可
+- **为什么仓库不含图片**: miniWorld 遵循“纯文本仓库”原则,任何 PNG/ZIP 等二进制素材都通过 `.gitignore` 排除。外部像素资源使用 `assets/external_catalog.json` 描述来源、许可与放置路径,并由 `scripts/fetch_assets.py` 在本地创建占位或下载,确保审计透明、仓库轻量。
+- **许可合规策略**:
+  - CC0 素材可在不署名情况下使用,脚本会在 `assets/licenses/ASSETS_LICENSES.md` 中写明“无需署名”。
+  - CC-BY/CC-BY-SA 素材需要在发布渠道列出作者、链接与许可条款,脚本会自动生成可复制的署名段落;若选择 `--with-lpc`,还会追加 LPC 专用模板。
+  - 发布包含 CC-BY-SA 素材的制品时必须以相同许可共享衍生作品,建议在游戏内“制作人员”或“资源来源”页引用 `ASSETS_LICENSES.md` 中的内容。
+- **快速上手流程**:
+  1. `make assets` —— 本地仅处理 CC0 源,会在 `assets/build/` 下生成占位文件或下载的 ZIP 解压结果。
+  2. 如需包含 LPC 资源,使用 `make assets-cc0-lpc`;脚本会在许可证文档中自动附加署名提示。
+  3. `make assets-verify` —— 运行 `scripts/verify_bindings.py`,校验 `assets/mapping/*.json` 引用的文件是否存在。
+  4. 启动后端 `uvicorn miniWorld.app:app --reload`,前端可访问以下新接口:
+     - `GET /assets/tilesets`
+       ```json
+       {
+         "tile_size": 32,
+         "atlas_hint": "assets/build/kenney/tilesheet.png",
+         "bindings": {
+           "GRASS": {"atlas": "assets/build/kenney/tilesheet.png", "id": 101}
+         }
+       }
+       ```
+     - `GET /assets/personas`
+       ```json
+       {
+         "勇者": {"avatar": "assets/build/kenney/portraits/hero_01.png"},
+         "剑士": {"avatar": "assets/build/kenney/portraits/knight_01.png"}
+       }
+       ```
+  5. 前端按照映射加载实际 PNG;若文件缺失,可回退到占位色块或文字徽标。
+- **失败与降级策略**:
+  - `fetch_assets.py --dry-run` 会创建目录与 `.placeholder` 文件计划,并在许可证文档写明“当前未拉取任何素材”。
+  - API 在文件缺失时返回 200 与带提示的空结构,日志会记录警告,避免前端崩溃。
+  - `assets-verify` 会在素材缺失时返回非零,并输出“需要先执行 fetch 或手动放置素材”等指导语。
+- **常见问题 FAQ**:
+  - *网络受限怎么办?* —— 使用 `--dry-run` 获取本地目录结构,然后手动将下载好的 PNG 放入 `assets/build/<source>/`。
+  - *直链失效或无哈希?* —— `external_catalog.json` 的 `notes` 字段提供手动下载说明;脚本会提示“未提供哈希校验”。
+  - *如何仅使用自制素材?* —— 将自制 PNG 放入 `assets/build/custom/`,并更新 `assets/mapping/*.json` 指向新的路径,再执行 `make assets-verify`。
+  - *需要在何处展示署名?* —— 游戏内设置“素材来源”页或 README 中引用 `ASSETS_LICENSES.md`,确保 CC-BY/SA 的条款可见。
+
 ## 外部 LLM 接入说明
 - 默认使用 `PersonaAwareGenerator` 离线模板生成器,不会访问网络。
 - 若需启用外部 LLM:
@@ -206,4 +250,5 @@ miniWorld 以“王都近郊重建”为核心背景,提供一个可离线运行
 - 存档/快照: 定期生成世界快照,支持回滚与分支试验。
 
 ## Changelog
+- **第四轮: 外部像素素材库接入**: 新增 `assets/external_catalog.json` 管理素材源,提供 `scripts/fetch_assets.py`/`scripts/verify_bindings.py` 本地拉取与校验流程,并开放 `/assets/tilesets`、`/assets/personas` API,确保仓库仍保持纯文本与可审计。
 - **角色互动 + 世界建设 + 任务系统**: 引入区块化世界模型、角色权限矩阵、任务生成与推进机制,拓展 `/world/*` 与 `/chat/simulate` 接口以返回建设上下文。当前仍以离线本地生成器为默认实现,外部 LLM 接入保持可选开关。

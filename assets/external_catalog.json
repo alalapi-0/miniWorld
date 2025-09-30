@@ -1,0 +1,30 @@
+{
+  "_comment": "列出所有可选素材源及许可信息,供脚本解析时提供提示", 
+  "sources": [
+    {
+      "name": "Kenney Top-Down pack",
+      "license": "CC0",
+      "homepage": "https://kenney.nl/assets",
+      "download": "https://example.com/kenney-topdown.zip",
+      "notes": "仅使用 tilesheet_*.png, portraits_*.png 等; 解压后放入 assets/build/kenney/",
+      "_comment": "示例直链仅用于说明,实际使用时请替换为官方提供的链接"
+    },
+    {
+      "name": "Itch.io CC0 Tilesets",
+      "license": "CC0",
+      "homepage": "https://itch.io/game-assets/assets-cc0/tag-tileset",
+      "download": null,
+      "notes": "示例: 手动下载某 CC0 tileset; 把 png 放到 assets/build/itch-cc0/ 下",
+      "_comment": "download 为空表示需手动下载,脚本会创建占位"
+    },
+    {
+      "name": "OpenGameArt LPC Terrains",
+      "license": "CC-BY-SA",
+      "homepage": "https://opengameart.org/",
+      "download": null,
+      "attribution": "需在 ASSETS_LICENSES.md 标注作者与链接; 若打包再发布,需遵守相同方式共享",
+      "notes": "可选使用; 若不准备遵守 SA 条款,请在 fetch 时选择 --only-cc0",
+      "_comment": "强调共享相同许可的要求,并提示如何在脚本中排除"
+    }
+  ]
+}

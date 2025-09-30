@@ -9,6 +9,7 @@ from typing import Any  # 导入 Any,用于注解 payload
 from fastapi import FastAPI, HTTPException, Request  # 导入 FastAPI 相关类
 from fastapi.responses import JSONResponse  # 导入 JSONResponse,自定义错误响应
 
+from .assets_api import router as assets_router  # 导入素材接口路由
 from .config import get_settings  # 导入配置加载函数
 from .models import (  # 导入数据模型
     ChatSimulateResponse,  # 聊天响应模型
@@ -40,6 +41,7 @@ logger = logging.getLogger(__name__)  # 创建模块级日志记录器
 
 settings = get_settings()  # 读取全局配置
 app = FastAPI(title=settings.app_name, debug=settings.debug)  # 创建 FastAPI 应用实例
+app.include_router(assets_router)  # 挂载素材接口路由
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]  # 计算工程根目录
 _DATA_ROOT = _PROJECT_ROOT / "data"  # 定义数据目录

@@ -1,0 +1,13 @@
+{
+  "_comment": "定义逻辑瓦片类型到外部图集中具体瓦片编号的映射,供前端渲染时查找",
+  "tile_size": 32,
+  "atlas_hint": "优先使用 assets/build/kenney/tilesheet.png, 如缺失则前端可退化成占位色块",
+  "bindings": {
+    "GRASS": { "atlas": "assets/build/kenney/tilesheet.png", "id": 101 },
+    "ROAD":  { "atlas": "assets/build/kenney/tilesheet.png", "id": 205 },
+    "WATER": { "atlas": "assets/build/kenney/tilesheet.png", "id": 301 },
+    "SOIL":  { "atlas": "assets/build/kenney/tilesheet.png", "id": 120 },
+    "TREE":  { "atlas": "assets/build/kenney/tilesheet.png", "id": 501 },
+    "HOUSE_BASE": { "atlas": "assets/build/kenney/tilesheet.png", "id": 620 }
+  }
+}

@@ -1,4 +1,4 @@
-.PHONY: setup lint format test run assets check
+.PHONY: setup lint format test run assets assets-cc0-lpc assets-verify check
 
 # 创建虚拟环境并安装依赖
 setup:
@@ -20,11 +20,20 @@ test:
 run:
 	uvicorn miniWorld.app:app --reload
 
-# 本地生成像素占位资源（请勿提交 assets/build/ 内容）
+# 一键仅处理 CC0 来源,本地创建占位或下载素材(不会提交到仓库)
 assets:
-	@echo "[提示] 本命令将在本地生成占位 PNG 到 assets/build/，请勿提交到仓库"
-	python assets/generators/generate_sample_tiles.py
-	python assets/generators/generate_sample_sprites.py
+	# 调用素材拉取脚本,仅处理 CC0 许可
+	python scripts/fetch_assets.py --only-cc0
+
+# 包含 CC0 与 LPC 资源,会在许可证文档写入署名提示
+assets-cc0-lpc:
+	# 调用素材拉取脚本,允许包含 LPC CC-BY-SA 资源
+	python scripts/fetch_assets.py --only-cc0 --with-lpc
+
+# 校验映射 JSON 与本地素材文件是否一致
+assets-verify:
+	# 执行校验脚本,确保映射与文件存在
+	python scripts/verify_bindings.py
 
 # 一键执行静态检查与测试
 check:
