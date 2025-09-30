@@ -18,7 +18,7 @@ test:
 
 # 启动本地开发服务器
 run:
-	uvicorn ai_groupchat.app:app --reload
+	uvicorn miniWorld.app:app --reload
 
 # 本地生成像素占位资源（请勿提交 assets/build/ 内容）
 assets:

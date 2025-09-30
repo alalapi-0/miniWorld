@@ -1,7 +1,7 @@
 [project]
-name = "ai-groupchat"
-version = "0.1.0"
-description = "本地可运行的 AI 角色群聊模拟器后端原型"
+name = "miniWorld"
+version = "0.3.0"
+description = "miniWorld: 六角色协同建设的离线像素世界模拟后端"
 authors = [{ name = "YOUR_NAME" }]
 readme = "README.md"
 requires-python = ">=3.11,<4.0"
@@ -10,6 +10,7 @@ dependencies = [
     "uvicorn>=0.30,<1.0",
     "pydantic>=2.8,<3.0",
     "pydantic-settings>=2.3,<3.0",
+    "httpx>=0.27,<1.0",
 ]
 
 [tool.black]
