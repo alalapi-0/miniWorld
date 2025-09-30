@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>miniWorld 地图探索器</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        margin: 0;
+        background: #10131c;
+        color: #f2f5ff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+      header {
+        text-align: center;
+        padding: 16px 0 0;
+      }
+      canvas {
+        background: #1f2330;
+        border: 2px solid #4f5d75;
+        image-rendering: pixelated;
+      }
+      .hint {
+        max-width: 640px;
+        padding: 0 16px 16px;
+        text-align: center;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>miniWorld 地图探索器</h1>
+      <p class="hint">
+        使用键盘方向键控制角色移动。角色素材由 <code>scripts/gen_sprite.py</code>
+        生成，默认提供占位图，可替换为 AI 或手工绘制的三视图。
+      </p>
+    </header>
+    <canvas id="world-canvas" width="512" height="512"></canvas>
+    <script src="explorer.js" type="module"></script>
+  </body>
+</html>
