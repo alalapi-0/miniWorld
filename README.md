@@ -1,186 +1,209 @@
-> ⚠️ 当前项目默认运行在“离线本地生成”模式，外部 LLM 接入仅作为可选增强功能。
+> ⚠️ 当前项目默认运行在“离线本地生成”模式,外部 LLM 接入仅作为可选增强功能。
 
-# AI 群聊模拟器（后端原型）
+# miniWorld —— 六角色协作的像素世界建设后端
 
-## 1. 项目简介
-本项目提供一个围绕“王道异世界像素 RPG”世界观构建的多角色群聊模拟后端。默认使用纯本地的确定性生成器，结合世界时间轴与角色人设，在离线或安全受限环境中也能稳定复现对话流程。若需连接真实的 LLM 服务，可通过配置开关在后续阶段接入，但默认保持断网与本地模式以便开发调试。
+## 目录
+1. [项目概述](#项目概述)
+2. [架构与目录结构](#架构与目录结构)
+3. [世界模型设计](#世界模型设计)
+4. [角色与权限矩阵](#角色与权限矩阵)
+5. [任务系统](#任务系统)
+6. [API 文档](#api-文档)
+7. [前端协作契约](#前端协作契约)
+8. [外部 LLM 接入说明](#外部-llm-接入说明)
+9. [开发规范](#开发规范)
+10. [路线图](#路线图)
+11. [Changelog](#changelog)
 
-## 2. 架构与目录结构
+## 项目概述
+miniWorld 以“王都近郊重建”为核心背景,提供一个可离线运行的世界建设与角色群聊后端。系统内置六位角色(勇者、剑士、魔导师、神官、盗贼、公主),每位角色拥有独特的人设、权限与目标。服务在本地使用确定性模板生成器响应对话,同时提供区块化的世界地形、结构编辑、树木生长与任务推进等能力,便于像素 RPG 前端或小程序快速接入。
+
+## 架构与目录结构
 ```
 .
 ├─ assets/
-│  ├─ pixel_meta/                # 世界地图、城镇、角色与 UI 的像素规格元数据
-│  └─ generators/                # 占位 PNG 生成脚本（默认不执行，不提交产物）
-├─ src/
-│  └─ ai_groupchat/
-│     ├─ __init__.py
-│     ├─ app.py                  # FastAPI 应用与接口
-│     ├─ config.py               # 环境配置（含世界状态与人设）
-│     ├─ models.py               # Pydantic 数据模型
-│     ├─ main.py                 # 命令行启动入口
-│     └─ services/
-│        ├─ __init__.py
-│        └─ generator.py         # 本地/人设感知/预留外部 LLM 生成器
-├─ tests/                        # pytest 覆盖所有接口
-├─ Makefile                      # 常用命令（含 make assets / make check）
-├─ requirements.txt              # 运行与脚本依赖（含 Pillow）
+│  ├─ pixel_meta/                # 像素元数据,纯文本描述瓦片规格
+│  └─ generators/                # 占位 PNG 生成脚本(默认不执行)
+├─ data/
+│  ├─ world/chunks/              # 区块 JSON(运行期生成)
+│  ├─ world/world_state.json     # 世界状态持久化
+│  ├─ world/quests.json          # 任务存档
+│  └─ logs/actions.log           # 审计日志
+├─ src/miniWorld/
+│  ├─ app.py                     # FastAPI 应用与路由
+│  ├─ main.py                    # 命令行启动入口
+│  ├─ config.py                  # Pydantic Settings,加载人设与权限
+│  ├─ models.py                  # 公共 Pydantic 模型
+│  ├─ services/
+│  │  └─ generator.py            # 本地回复生成器 + 任务生成器
+│  └─ world/
+│     ├─ __init__.py             # 世界模型汇总导出
+│     ├─ actions.py              # 动作请求/响应、权限校验
+│     ├─ chunk.py                # 32×32 区块与 TileCell 数据结构
+│     ├─ quests.py               # 任务模型与 QuestProgressor
+│     ├─ store.py                # JSON 存储、配额冷却与日志
+│     ├─ tiles.py                # TileType 枚举与辅助方法
+│     └─ world_state.py          # 不可变世界状态模型
+├─ tests/                        # pytest 用例,覆盖世界模型/动作/任务/API
+├─ Makefile                      # 常用命令(make check/ make run 等)
+├─ pyproject.toml                # 包配置、lint/test 设置
 └─ README.md
 ```
 
-## 3. 世界观与时间轴
-- 默认世界状态 `WorldState` 包含年份（1024 年）、季节（春季）、地点（格兰王都）与关键事件（圣印遗失、魔导回路紊乱）。
-- 可在 `.env` 中通过 `WORLD_YEAR`、`WORLD_SEASON`、`DEFAULT_LOCATION` 覆盖上述设定；在开发环境可调用 `POST /world/state` 动态调整。
-- 世界事件会被嵌入 Prompt：生成器会自动拼接 `年份/季节/地点/重大事件`，让角色回复紧贴时间线变化。
-- 示例：
-  ```text
-  地点：隐匿峡谷｜季节：春｜年份：1024｜事件：王都圣印遗失引发王国震动、边境魔导回路出现紊乱
-  ```
-  该文本会与用户消息组合后传入生成器，产出符合异世界背景的回复。
+## 世界模型设计
+- **区块尺寸**: 固定为 32×32,支持高度、高度装饰、成长阶段字段。
+- **瓦片定义**: `TileType` 枚举包含 GRASS、ROAD、WATER、SOIL、WOODFLOOR、HOUSE_BASE、TREE_SAPLING、TREE、FARM、ROCK、SHRUB、MAGIC_SIGIL 等地表/装饰类型。`TileType.is_structure()` 可判断结构基座, `TileType.can_be_decor()` 判断是否可放入装饰槽。
+- **TileCell**: 记录 `base` 基础瓦片、`deco` 装饰槽、`height` 高度差、`growth_stage` 树苗成长阶段。
+- **Chunk**: 包含 `cx/cy` 坐标、`size`、`grid` 二维数组,提供 `cell_at`/`apply_cell`/`to_summary` 等方法,确保越界安全。
+- **世界状态**: `WorldState` 包含 `version`、`year`、`season`、`location`、`major_events`、`seed`,默认值来自 `.env` 或配置文件。`WorldState.describe()` 输出 `年-季-地点-事件` 文本,用于 Prompt 拼装。
+- **持久化策略**: `WorldStore` 将区块写入 `data/world/chunks/{cx}_{cy}.json`,世界状态写入 `data/world/world_state.json`,任务存储在 `data/world/quests.json`,配额信息存于 `actor_usage.json`,审计日志追加至 `data/logs/actions.log`。
+- **成长逻辑**: `POST /world/tick` 遍历区块,将 `TREE_SAPLING` 根据 `TICK_TREE_GROW_STEPS` 自动成长为 `TREE`,并记录变更。
 
-## 4. 六角色人设一览
-| 名称 | Archetype | 说话风格 | 知识标签 | 道德阵营 | 目标 |
-| --- | --- | --- | --- | --- | --- |
-| 勇者 | 勇者/外来者 | 直白乐观、略带现代梗、尊重同伴 | 现代常识；基础魔物图鉴 | 守序善良 | 找回失落的圣印，守护新伙伴 |
-| 剑士 | 王都禁卫/骑士 | 简练、重承诺、常以军语行文 | 王国律法；军事礼仪 | 守序中立 | 维持秩序，护送队伍穿越边境 |
-| 魔导师 | 高塔学者/元素研究者 | 术语密集、好引用典籍、理性克制 | 元素学；古代魔法史 | 中立善良 | 修复湮灭的魔导回路，验证理论 |
-| 神官 | 巡礼者/教会使徒 | 温柔劝勉、偶有经文比喻 | 神学仪式；医疗药理 | 守序善良 | 追寻“光明遗器”，治疗瘟潮 |
-| 盗贼 | 城底斥候/情报客 | 俏皮挖苦、擅用暗号、避免正面承诺 | 黑市流通；陷阱与机关 | 混乱中立 | 替老友赎罪，追查幕后商会 |
-| 公主 | 流亡王女/谈判者 | 礼貌端庄、善外交辞令、偶露真情 | 封疆史；礼仪与条约 | 中立善良 | 重建同盟，避免战端再起 |
+## 角色与权限矩阵
+角色权限通过 `RolePermission` 定义,支持动作白名单、瓦片白名单、冷却时间、每日配额与禁区。默认策略如下:
 
-如需自定义角色，可在 `.env` 中配置 `PERSONAS_JSON`（JSON 数组），其字段需与上表保持一致。
+| 角色 | 允许动作 | 关键白名单 | 冷却/配额 | 备注 |
+| --- | --- | --- | --- | --- |
+| 勇者 | PLACE_TILE, PLANT_TREE, FARM_TILL | 道路/草地/木地板、草地种树 | 种树每日上限 20 | 负责日常建设与植树 |
+| 剑士 | PLACE_TILE, REMOVE_TILE | 道路铺设、移除树木 | 拆除冷却 30s | 维护道路、防御设施 |
+| 魔导师 | PLACE_TILE, PLANT_TREE, PLACE_STRUCTURE | 水面/木地板/魔法基座 | - | 可在特殊地形铺设魔导阵 |
+| 神官 | PLANT_TREE, FARM_TILL | 圣树种植、翻土 | 翻土每日 50 次 | 负责土地赐福与农田建设 |
+| 盗贼 | REMOVE_TILE, PLACE_TILE | 拆除树木/地板、铺设隐匿地板 | 拆除冷却 60s,每日 30 次 | 清除陷阱与布设暗道 |
+| 公主 | PLACE_STRUCTURE, PLACE_TILE | 房屋基建、主干道路 | 禁止拆除地基 | 统筹公共设施建设 |
 
-## 5. 像素资源与美术规范
-- `assets/pixel_meta/**.meta.json` 保存像素规格元数据，包含瓦片尺寸、色板标签、索引语义等；这些文件只含文本，便于版本管理。
-- `assets/generators/*.py` 使用 Pillow 程序化生成占位 PNG（32x32 瓦片、48x48 头像），默认不执行。
-- 运行 `make assets` 可在本地生成资源到 `assets/build/`，**请勿将该目录提交到仓库**。
-- 调色板遵循 16 色 Game Boy Color 风格，瓦片命名使用三位数索引（如 `001 grass`、`100 roof`）。
+> 若需调整权限,可在 `.env` 中通过 `ROLE_PERMISSIONS_JSON` 指定 JSON 字符串覆盖默认设置。
 
-## 6. 配置说明
-- `.env.example` 列出了所有配置项。
-- 关键环境变量：
-  - `APP_NAME`、`HOST`、`PORT`、`DEBUG`：FastAPI 基本设置。
-  - `WORLD_YEAR`、`WORLD_SEASON`、`DEFAULT_LOCATION`：覆盖默认世界状态。
-  - `PERSONAS_JSON`：以 JSON 字符串覆盖默认六人设。
-  - `REPLY_SENTENCES_PER_ROLE`、`SEED`：控制本地生成器行为。
-  - `USE_EXTERNAL_LLM`、`LLM_PROVIDER`、`OPENAI_API_KEY`、`OPENAI_BASE_URL`：预留给未来接入外部 LLM。
+## 任务系统
+- **模型**: `Quest` 包含 `id/title/desc/giver/assignee/status/requirements/rewards/created_at/updated_at`。`ActionRequirement` 描述目标动作、瓦片、区块范围、目标次数与当前进度,支持监控 `base` 或 `deco` 层。
+- **持久化**: 任务写入 `data/world/quests.json`,`QuestProgressor` 负责读取/保存,并在动作成功后调用 `on_action_success` 更新进度,完成时自动写入审计日志。
+- **生成**: `QuestGenerator.ensure_seed_quests()` 根据世界状态与种子生成默认建设任务(如铺设主干道、种植护城树林、翻耕农田)。若 `quests.json` 已存在任务,则保持现状。
+- **推进**: 成功的 `ActionRequest` 会返回变更列表并触发 `QuestProgressor` 增加需求进度。达成目标时任务状态由 `OPEN` → `IN_PROGRESS` → `DONE`,并记录 `payload={"quest_id":...}` 的审计条目。
 
-## 7. 生成管线与 Prompt 拼装策略
-- `LocalDeterministicGenerator`：基础模板生成器，用于产出稳定的段落。
-- `PersonaAwareGenerator`：在本地模板基础上嵌入 `WorldState` 与 `Persona` 信息，输出形如：
-  ```text
-  1024 年春季，格兰王都。近期事件：王都圣印遗失引发王国震动、边境魔导回路出现紊乱。勇者以勇者/外来者的身份，目标是找回失落的圣印，口吻应直白乐观、略带现代梗、尊重同伴，熟悉领域：现代常识、基础魔物图鉴。回复：勇者整理装备后回应：...
-  ```
-- Prompt 拼装模板：
-  ```text
-  {用户输入}｜地点：{location}｜季节：{season}｜年份：{year}｜事件：{events}｜角色风格：{speaking_style}｜目标：{goal}｜建议句数：{N}
-  ```
-- `ExternalLLMGenerator`：占位实现，仅定义方法与安全说明，默认抛出未实现异常，提醒保持离线模式。
-
-## 8. API 文档
+## API 文档
 ### GET /health
-- **用途**：健康检查。
-- **响应**：`{"status": "ok"}`。
+- 用途: 健康检查。
+- 响应: `{ "status": "ok" }`。
 
 ### GET /world/state
-- **用途**：查看当前世界状态。
-- **响应示例**：
+- 用途: 查看世界时间、地点与事件。
+- 响应示例:
   ```json
   {
-    "year": 1024,
+    "version": "v1",
+    "year": 302,
     "season": "春",
-    "major_events": ["王都圣印遗失引发王国震动", "边境魔导回路出现紊乱"],
-    "location": "格兰王都"
+    "location": "王都近郊",
+    "major_events": ["圣印遗失导致王国动荡", "边境魔导炉持续紊乱"],
+    "seed": 42
   }
   ```
 
-### POST /world/state
-- **用途**：在调试模式下更新世界状态，生产环境会返回 403。
-- **请求体**：`WorldState` JSON。
-- **响应**：返回更新后的 `WorldState`。
+### GET /world/chunk?cx=&cy=
+- 用途: 返回指定区块 32×32 网格(包含 base/deco/height/growth_stage)。
+- 响应: `Chunk` Pydantic 模型序列化结果。
 
-### GET /personas
-- **用途**：获取六位默认角色的人设元数据，用于前端展示头像/名牌。
-- **响应**：`Persona` 数组。
+### GET /world/quests
+- 用途: 查看当前任务列表与进度。
+- 响应: `Quest[]`,其中 `requirements[].progress` 会随动作更新。
 
-### GET /pixel/meta
-- **用途**：汇总 `assets/pixel_meta/**.meta.json` 内容，前端可用来构建瓦片与 UI。
-- **响应**：
+### POST /world/action
+- 请求体(`ActionRequest`):
   ```json
   {
-    "files": {
-      "tilesets/overworld_tileset.meta.json": {"tile_size": 32, ...},
-      "sprites/personas.meta.json": {"sprite_spec": {...}},
-      "sprites/ui.meta.json": {...},
-      "tilesets/town_tileset.meta.json": {...}
-    }
+    "actor": "勇者",
+    "type": "PLACE_TILE",
+    "chunk": {"cx": 20, "cy": 20},
+    "pos": {"x": 0, "y": 0},
+    "payload": {"tile": "ROAD"},
+    "client_ts": 1000000
+  }
+  ```
+- 执行流程: 权限校验 → 配额/冷却 → 规则验证(水面造屋限制等) → 应用事务 → 持久化 → 追加审计日志 → 更新任务进度。
+- 响应(`ActionResponse`):
+  ```json
+  {
+    "success": true,
+    "message": "动作执行成功",
+    "changes": [
+      {
+        "chunk": {"cx": 20, "cy": 20},
+        "pos": {"x": 0, "y": 0},
+        "before": {"base": "GRASS", "deco": null, "height": 0, "growth_stage": null},
+        "after": {"base": "ROAD", "deco": null, "height": 0, "growth_stage": null}
+      }
+    ],
+    "code": 0
+  }
+  ```
+- 错误时返回 `ErrorResponse {"code":403/400/404, "msg":"..."}`。
+
+### POST /world/tick
+- 用途: 推进世界时间并处理树苗成长。
+- 响应示例:
+  ```json
+  {
+    "message": "世界时间推进完成",
+    "changes": [
+      {
+        "chunk": {"cx": 0, "cy": 0},
+        "pos": {"x": 3, "y": 8},
+        "before": {"base": "GRASS", "deco": "TREE_SAPLING", "height": 0, "growth_stage": 2},
+        "after": {"base": "GRASS", "deco": "TREE", "height": 0, "growth_stage": null}
+      }
+    ]
+  }
+  ```
+
+### GET /personas
+- 用途: 返回角色人设及权限摘要。
+- 响应示例:
+  ```json
+  {
+    "personas": [
+      {
+        "persona": {"name": "勇者", "archetype": "来自异世界的勇者", ...},
+        "allowed_actions": ["FARM_TILL", "PLACE_TILE", "PLANT_TREE"],
+        "tile_whitelist": {"PLACE_TILE": ["GRASS", "ROAD", "SOIL", "WOODFLOOR"]},
+        "cooldown_seconds": {},
+        "daily_quota": {"PLANT_TREE": 20}
+      }
+    ]
   }
   ```
 
 ### POST /chat/simulate
-- **用途**：基于世界状态与选定角色生成群聊回复。
-- **请求体（MessageIn）**：
+- 用途: 根据世界概况与任务摘要生成多角色回复。
+- 请求示例:
   ```json
-  {
-    "content": "请汇报前线情报",
-    "roles": ["勇者", "盗贼"],
-    "location": "隐匿峡谷"
-  }
+  {"content": "请汇报道路建设", "roles": ["公主", "剑士"]}
   ```
-- **响应体（ChatSimulateResponse）**：`replies` 数组，每位角色会根据 `Persona` 与 `WorldState` 生成 `REPLY_SENTENCES_PER_ROLE` 条语义的文本段落。
+- 响应(`ChatSimulateResponse`): `replies` 数组,每条文本包含地点、季节、任务摘要等提示,便于前端展示“群聊播报”。
 
-## 9. 快速开始
-1. **创建虚拟环境**：
-   ```bash
-   python3.11 -m venv .venv
-   source .venv/bin/activate
-   ```
-2. **安装依赖**：
-   ```bash
-   pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
-3. **运行服务**：
-   ```bash
-   make run
-   # 或
-   uvicorn ai_groupchat.app:app --reload
-   ```
-4. **运行测试与检查**：
-   ```bash
-   make check
-   ```
-5. **（可选）生成像素占位图**：
-   ```bash
-   make assets
-   # 产物位于 assets/build/，请勿提交
-   ```
+## 前端协作契约
+- **世界加载**: 前端按需请求 `/world/chunk?cx=&cy=` 获取 32×32 网格,可根据 `version` 实现未来的 ETag 缓存策略。
+- **动作执行**: 调用 `/world/action` 后,客户端可根据 `changes` 乐观更新本地场景,如失败则回滚。
+- **任务面板**: `/world/quests` 返回的 `progress` 与 `target_count` 可直接驱动进度条,任务完成时会在审计日志与群聊播报中同步提示。
+- **群聊播报**: `/chat/simulate` 输出文本已包含 `地点/季节/任务摘要`,前端可直接渲染为群聊气泡或系统公告。
 
-## 10. 开发规范
-- Python 代码使用中文逐行注释与完整 docstring，便于团队沟通设定。
-- 统一使用 `ruff` 与 `black` 维护代码风格，`pytest` 覆盖所有接口。
-- `make check` 会依次执行 `ruff`、`black --check` 与 `pytest`。
+## 外部 LLM 接入说明
+- 默认使用 `PersonaAwareGenerator` 离线模板生成器,不会访问网络。
+- 若需启用外部 LLM:
+  1. 在 `.env` 中设置 `USE_EXTERNAL_LLM=true` 并提供 `OPENAI_API_KEY`、`LLM_PROVIDER`、`OPENAI_BASE_URL`(可选)。
+  2. 建议在生产环境配置调用超时、重试策略、速率限制与审计日志,并对 Prompt 内容进行脱敏处理。
+  3. 当前 `ExternalLLMGenerator` 为占位实现,需要根据实际供应商补全 SDK 调用代码。
 
-## 11. 从本地到真·API 的迁移路径
-1. 将 `.env` 中的 `USE_EXTERNAL_LLM` 设为 `true`，配置 `LLM_PROVIDER`、`OPENAI_API_KEY`、`OPENAI_BASE_URL`（如需代理）。
-2. 在 `ExternalLLMGenerator` 中实现实际的 API 调用：需增加超时、指数退避重试、速率限制与错误日志，并确保脱敏处理。
-3. 将调用与响应写入审计日志，遵守公司安全策略；密钥必须通过环境变量或安全密钥管理服务注入。
-4. 在切换到生产时，保持 `POST /world/state` 禁用（`DEBUG=false`），并监控外部 API 的速率与费用。
+## 开发规范
+- **注释**: 所有 `src/**/*.py` 使用中文逐行注释与完整 docstring,确保世界观信息易于共享。
+- **类型与格式**: `ruff` 负责静态检查,`black` 管理格式,`pytest` 覆盖关键逻辑;`make check` 会依次执行三者。
+- **数据文件**: 禁止提交 `assets/build/` 等生成物;运行期写入的 JSON/日志保留在 `data/` 下,利于本地调试。
+- **测试**: 新增用例覆盖区块持久化、动作权限、任务推进、聊天上下文与 API 冒烟。
 
-## 12. 路线图（Roadmap）
-- 接入真实 LLM（OpenAI、Azure OpenAI、通义千问等），完善 `ExternalLLMGenerator`。
-- 引入角色长期记忆、对话上下文管理与个性化话术配置。
-- 记录多轮对话日志，支持回放与分析。
-- 与 Web/小程序前端集成，展示像素场景与角色头像。
-- 设计容器化与 Serverless 部署方案，完善监控与告警。
+## 路线图
+- 多玩家协作: 引入身份认证与队伍分组,支持实时协同建设。
+- 回放系统: 基于审计日志重建施工时间线,提供可视化时光轴。
+- WebSocket 推送: 即时广播世界变更与任务完成状态。
+- 权限可视化: 构建 GUI 管理界面,动态调整角色配额、禁区。
+- 存档/快照: 定期生成世界快照,支持回滚与分支试验。
 
-## 13. 常见问题（FAQ）
-- **端口占用**：若 8000 端口被占用，可修改 `.env` 中的 `PORT`。
-- **虚拟环境问题**：确保激活虚拟环境后再执行 `pip install` 与 `make`。
-- **像素资源缺失**：仓库不包含二进制图片，可使用 `make assets` 在本地生成占位图。
-- **角色/世界设定扩展**：通过 `PERSONAS_JSON` 和 `POST /world/state` 快速调整设定，便于迭代剧情。
-
-## 14. 许可证
-项目基于 MIT License 发布，详见 [LICENSE](LICENSE)。
-
-## 15. 变更日志 / Changelog
-- 2024-08-30：引入王道异世界世界观、六位默认人设、PersonaAwareGenerator、世界状态接口、像素元数据与占位图脚本，README 同步说明并新增 make assets / make check。
+## Changelog
+- **角色互动 + 世界建设 + 任务系统**: 引入区块化世界模型、角色权限矩阵、任务生成与推进机制,拓展 `/world/*` 与 `/chat/simulate` 接口以返回建设上下文。当前仍以离线本地生成器为默认实现,外部 LLM 接入保持可选开关。

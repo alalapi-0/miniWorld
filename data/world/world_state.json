@@ -1,0 +1,11 @@
+{
+  "version": "v1",
+  "year": 302,
+  "season": "春",
+  "location": "王都近郊",
+  "major_events": [
+    "圣印遗失导致王国动荡",
+    "边境魔导炉持续紊乱"
+  ],
+  "seed": 42
+}

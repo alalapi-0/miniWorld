@@ -1,4 +1,4 @@
-"""服务层包的初始化模块。"""  # 模块级 docstring,说明用途
+"""服务层包的初始化模块。"""  # 模块级 docstring,说明用途  # noqa: N999
 
 from .generator import (  # 从生成器模块导入公开类
     BaseRoleGenerator,  # 生成器协议接口

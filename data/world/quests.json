@@ -1,0 +1,116 @@
+[
+  {
+    "id": "quest_main_road",
+    "title": "铺设主干道路",
+    "desc": "在王都近郊修建 40 格石路,确保补给畅通。",
+    "giver": "公主",
+    "assignee": [
+      "勇者",
+      "剑士"
+    ],
+    "status": "OPEN",
+    "requirements": [
+      {
+        "action_type": "PLACE_TILE",
+        "target_tile": "ROAD",
+        "chunk": {
+          "cx": 0,
+          "cy": 0
+        },
+        "x_range": [
+          0,
+          31
+        ],
+        "y_range": [
+          0,
+          31
+        ],
+        "target_count": 40,
+        "progress": 0,
+        "layer": "base"
+      }
+    ],
+    "rewards": [
+      "道路通行效率提升",
+      "声望+10"
+    ],
+    "created_at": 42000,
+    "updated_at": 42000
+  },
+  {
+    "id": "quest_forest_ring",
+    "title": "栽种护城树林",
+    "desc": "在王都周围种下 20 棵树苗,构建天然防护。",
+    "giver": "神官",
+    "assignee": [
+      "神官",
+      "勇者"
+    ],
+    "status": "OPEN",
+    "requirements": [
+      {
+        "action_type": "PLANT_TREE",
+        "target_tile": "TREE_SAPLING",
+        "chunk": {
+          "cx": 0,
+          "cy": 0
+        },
+        "x_range": [
+          0,
+          31
+        ],
+        "y_range": [
+          0,
+          31
+        ],
+        "target_count": 20,
+        "progress": 0,
+        "layer": "deco"
+      }
+    ],
+    "rewards": [
+      "自然恩泽加持",
+      "治愈术效率提升"
+    ],
+    "created_at": 42000,
+    "updated_at": 42000
+  },
+  {
+    "id": "quest_farmland",
+    "title": "开垦农田",
+    "desc": "在近郊翻耕 30 格土地成为农田,储备粮食。",
+    "giver": "公主",
+    "assignee": [
+      "神官",
+      "勇者"
+    ],
+    "status": "OPEN",
+    "requirements": [
+      {
+        "action_type": "FARM_TILL",
+        "target_tile": "FARM",
+        "chunk": {
+          "cx": 1,
+          "cy": 0
+        },
+        "x_range": [
+          0,
+          31
+        ],
+        "y_range": [
+          0,
+          31
+        ],
+        "target_count": 30,
+        "progress": 0,
+        "layer": "base"
+      }
+    ],
+    "rewards": [
+      "粮仓储备提升",
+      "居民满意度上升"
+    ],
+    "created_at": 42000,
+    "updated_at": 42000
+  }
+]
