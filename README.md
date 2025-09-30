@@ -10,11 +10,12 @@
 5. [任务系统](#任务系统)
 6. [API 文档](#api-文档)
 7. [前端协作契约](#前端协作契约)
-8. [素材接入与许可](#素材接入与许可)
-9. [外部 LLM 接入说明](#外部-llm-接入说明)
-10. [开发规范](#开发规范)
-11. [路线图](#路线图)
-12. [Changelog](#changelog)
+8. [用户角色生成与操控](#用户角色生成与操控)
+9. [素材接入与许可](#素材接入与许可)
+10. [外部 LLM 接入说明](#外部-llm-接入说明)
+11. [开发规范](#开发规范)
+12. [路线图](#路线图)
+13. [Changelog](#changelog)
 
 ## 项目概述
 miniWorld 以“王都近郊重建”为核心背景,提供一个可离线运行的世界建设与角色群聊后端。系统内置六位角色(勇者、剑士、魔导师、神官、盗贼、公主),每位角色拥有独特的人设、权限与目标。服务在本地使用确定性模板生成器响应对话,同时提供区块化的世界地形、结构编辑、树木生长与任务推进等能力,便于像素 RPG 前端或小程序快速接入。
@@ -189,6 +190,73 @@ miniWorld 以“王都近郊重建”为核心背景,提供一个可离线运行
 - **动作执行**: 调用 `/world/action` 后,客户端可根据 `changes` 乐观更新本地场景,如失败则回滚。
 - **任务面板**: `/world/quests` 返回的 `progress` 与 `target_count` 可直接驱动进度条,任务完成时会在审计日志与群聊播报中同步提示。
 - **群聊播报**: `/chat/simulate` 输出文本已包含 `地点/季节/任务摘要`,前端可直接渲染为群聊气泡或系统公告。
+
+## 用户角色生成与操控
+
+miniWorld 新增了“玩家角色”素材管线,用于快速替换探索者形象并在前端地图中移动。该流程完全离线,默认生成 PNG 占位图,也支持接入外部 AI 生成器。
+
+### 目录结构
+
+```
+assets/
+  sprites/
+    user_character/
+      description.txt    # 角色外观的自然语言描述
+      front.png           # 正面视角(可手工或 AI 生成)
+      side.png            # 侧面视角
+      back.png            # 背面视角
+      sheet.png           # 本地拼接出的三连帧 spritesheet
+frontend/
+  explorer.html          # 浏览器端地图+角色控制页面
+  explorer.js            # 渲染逻辑、键盘交互与碰撞检测
+scripts/
+  gen_sprite.py          # 读取描述并生成/拼接占位图
+```
+
+### 角色素材生成流程
+
+1. 在 `assets/sprites/user_character/description.txt` 中撰写角色外观描述,例如“细长的列车外形角色,拥有圆形的大嘴巴作为头部……”。
+2. 执行 `python scripts/gen_sprite.py`,脚本会:
+   - 读取描述文本并打印到终端,预留外部 AI 接口调用位置(默认不发起网络请求)。
+   - 若 `front.png`/`side.png`/`back.png` 不存在,自动生成带标签的占位图,方便后续替换。
+   - 校验三张图片尺寸一致,然后横向拼接为 `sheet.png`。
+3. 脚本仅在本地写出 PNG 文件,不会将二进制素材提交到仓库。替换角色时,直接把新图片放入对应路径并重新执行脚本即可。
+
+### 对接外部 AI 生成器(可选)
+
+`scripts/gen_sprite.py` 中的 `request_ai_images` 函数预留了扩展点。可以在函数内部加入 API 调用逻辑,将生成的临时文件保存至 `front.png` 等路径。例如:
+
+```python
+def request_ai_images(description: str) -> dict[str, str]:
+    """示例伪代码,展示如何对接外部服务。"""
+    payload = {"prompt": description, "views": ["front", "side", "back"]}
+    response = client.post("https://api.example.com/sprite", json=payload, timeout=30)
+    response.raise_for_status()
+    images = response.json()["images"]
+    for view, base64_png in images.items():
+        (ASSETS_ROOT / f"{view}.png").write_bytes(base64.b64decode(base64_png))
+    return images
+```
+
+> 提示: 仍需遵守各自 API 的使用条款,并注意不要泄露密钥。仓库保持“零二进制”原则,因此生成后的 PNG 仅在本地保存。
+
+### 地图探索器
+
+- 打开 `frontend/explorer.html`(推荐通过 `python -m http.server` 或任何静态服务托管),页面会自动请求本地运行的 miniWorld 后端 `GET /world/chunk?cx=0&cy=0`。
+- 前端以 `tileset_binding.json` 的 `tile_size` 为像素基准渲染地图,缺失图集时退化为纯色瓦片。
+- 角色素材来自 `sheet.png` 的三帧,按“正面/侧面/背面”顺序绘制。按下方向键或 WASD:
+  - ↑/W 使用背面帧,尝试向上移动一格。
+  - ↓/S 使用正面帧,向下移动。
+  - ←/A 使用侧面帧,向左移动。
+  - →/D 水平翻转侧面帧,向右移动。
+- 遇到 `WATER`、`HOUSE_BASE` 等阻挡瓦片时会停止移动;移动过程中简单循环方向帧,松开按键后回到静止帧。
+
+### 常见问题
+
+- **如何替换占位图?** 直接以同尺寸 PNG 覆盖 `front.png` 等文件,再次运行 `python scripts/gen_sprite.py` 即可生成新的 `sheet.png`。
+- **没有图形编辑器怎么办?** 可以保留脚本生成的占位图,或使用任意在线像素绘制工具导出 PNG 后覆盖。
+- **想换新角色?** 修改 `description.txt` 并替换图片,流程与初次生成一致,前端会自动加载最新的 spritesheet。
+
 
 ## 素材接入与许可
 - **为什么仓库不含图片**: miniWorld 遵循“纯文本仓库”原则,任何 PNG/ZIP 等二进制素材都通过 `.gitignore` 排除。外部像素资源使用 `assets/external_catalog.json` 描述来源、许可与放置路径,并由 `scripts/fetch_assets.py` 在本地创建占位或下载,确保审计透明、仓库轻量。
