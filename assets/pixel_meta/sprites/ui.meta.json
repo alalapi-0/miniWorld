@@ -1,0 +1,10 @@
+{
+  "_comment": "聊天气泡、头像框与按钮等 UI 像素元素规格。",
+  "elements": {
+    "chat_bubble": {"width": 96, "height": 48, "style": "rounded"},
+    "nameplate": {"width": 80, "height": 20, "style": "banner"},
+    "button": {"width": 64, "height": 24, "style": "pill"}
+  },
+  "palette": "ui-soft-12",
+  "usage_notes": "UI 元素基于 8px 网格绘制，可根据设备分辨率进行整数倍缩放。"
+}
